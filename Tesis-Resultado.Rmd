@@ -1,0 +1,649 @@
+---
+title: Tesis - Exploracion, Analisis, calibracion y prediccion de serie de tiempo con el metodo Box-Jenkins(SARIMA)
+output:
+  html_document: default
+  pdf_document: default
+  word_document: default
+  toc: true
+  toc_depth: 4
+---
+
+Elaborado por [Betho MC] bethomc0@gmail.com
+
+```{r setup, include=FALSE}
+library(tseries)
+library(astsa)
+library(forecast)
+library(itsmr)
+library(dygraphs)
+library(ggplot2)
+library(lmtest)
+library(FitAR)
+library(fmsb)
+library(xts)
+# Ubicacion del directorio 
+setwd("D:/Tesis2020/Investigacion/Resul/dia")
+
+#cargando archivo
+hora<-read.csv("analisis.csv",header = T, dec=".", sep=";")
+head(hora)
+summary(hora)
+dim(hora)
+names(hora)
+str(hora)
+#Cambiando variable year a CUANTITATIVO
+hora$year <- as.factor(hora$year)
+str(hora)
+
+```
+
+### SERIE ORIGINAL DE TOTAL DE HORAS DE TRABAJO MENSUAL DE LAS MAQUINARIAS DE LA MUNICIPALIDAD DE CARACOTO 2010 A  DICIEmBRE 2019
+
+```{r, fig.align='center'}
+#convertir los datos en serie
+shora<-ts(hora[ ,3],start=c(2010,1), freq=12)
+#SERIE MENSUAL DESDE 2010 A 2019
+shora
+capture.output(shora, file = "expoconsola.xls")
+```
+
+#### Para aplicar el metodo Box-Jenkins la serie de datos no debe de tener tendencia en media, en varianza y ajustarse a una distribucion normal
+
+### Resumen de la serie HORA
+
+```{r, fig.align='center'}
+summary(hora$horas)
+```
+
+# ===============================
+
+## FASE DE ANALISIS DEL COMPORTAMIENTO DE LA SERIE
+
+### Grafica de la serie hora
+
+```{r, fig.align='center'}
+dygraph(shora, main = 
+          "Horas de trabajo de maquinaria agricola de la Municipalidad de Caracoto 
+        desde enero 2010 a diciembre 2019",xlab = "Año",ylab = "Horas")%>%
+  dyOptions(fillGraph = TRUE, fillAlpha = 0.4)%>%
+  dyOptions(drawPoints = TRUE,pointSize = 2)%>% 
+  dyRangeSelector()
+```
+
+```{r, fig.align='center'}
+# Descomponer la serie de tiempo shora. Se almacena en el objeto fit
+fit <- decompose(shora, type='additive')
+summary(fit)
+```
+
+### DESCONPOSICION DE LA SERIE HORA
+
+```{r, fig.align='center'}
+# Para graficar de la serie
+autoplot(fit)+
+  labs(title = "Descomposicion de la serie de tiempo",                   
+       x = "Tiempo",
+       y = "Horas",
+       colour = "Gears")+
+  theme_bw()
+```
+
+### GRAFICA DE LA SERIE HORA CON TENDENCIA
+```{r}
+# Grafica de la serie con tendencia
+autoplot(shora, series="Serie tiempo") + 
+  autolayer(trendcycle(fit), series="Tendencia") +
+  labs(title = "Serie de tiempo",      
+       x = "Tiempo",
+       y = "Horas"
+  ) + 
+  theme_bw()
+```
+
+```{r}
+# En el grafico se observa que la serie de horas de trabajo de las maquinarias de la Municipalidad de Caracoto, tiene tendencia creciente.
+```
+
+
+### GRAFICA DE ESTACIONALIDAD DE LA SERIE HORA
+```{r, fig.align='center'}
+# Grafico de estacionalidad
+ggseasonplot(shora,lwd=2.5)
+```
+
+```{r}
+# Se puede observar mejor la estacionalidad, mostrando claramente que en enero, abril, agosto y diciembre se tiene un menor n?mero de horas y en los meses de mayo y octubre se tiene un mayor n?mero de horas de trabajo.
+```
+
+### GRAFICA DE CAJAS DE LA SERIE HORA
+```{r, fig.align='center'}
+#GRAFICA DE CAJAS
+ggplot(hora, aes(x = year, y = horas))+
+  theme_classic()+
+  geom_boxplot(aes(col = year), lwd = 1)+
+  coord_flip()+
+  stat_summary(fun.y=mean, col="gold")
+```
+
+```{r}
+# En el grafico se muestra que en la serie de horas de trabajo de las maquinarias agricola de la Municipalidad Distrital de Caracoto hay tendencia en varianza y en media en cada grupo de la distribucion de los datos.
+```
+
+### HISTOGRAMA DE LA SERIE HORA
+```{r, fig.align='center'}
+#HOSTOGRAMA la serie (horas de trabajo mensual)
+hist(shora, prob=T, col = "red",main="Histograma de horas trabajadas",
+     xlab="Horas Mensuales")
+lines(density(shora),lwd=2, col= "green")
+me<-mean(shora)
+me
+st<-sd(shora)
+st
+x <- seq(-450,450,length=120)
+x
+y <- dnorm(x,me,st)
+lines(x,y,lwd=2,col="blue")
+```
+
+```{r}
+# Se observa el histograma de la serie de horas de trabajo de las maquinarias agricola de la Municipalidad Distrital de Caracoto que no se ajusta a una distribucion normal, con curva de asimetria Positiva.
+```
+
+
+### GRAFICO DE TEST DE NORMALIDAD DE LA SERIE SHORA
+```{r}
+#=======================
+# Grafico de test de Normalidad
+qqnorm(shora)
+qqline(shora,col="red")
+```
+
+```{r}
+# Se observa de la serie de horas de trabajo de las maquinarias agricola de la Municipalidad Distrital de Caracoto que no se ajusta a una distribucion normal.
+```
+
+
+### TEST DE PEARSON DE LA SERIE HORA
+```{r, fig.align='center'}
+#test de Pearson
+# Pearson chi-square normality test
+tshora<-nortest::pearson.test(shora)
+tshora
+```
+
+```{r}
+# se tiene que el valor-P para la prueba fue de 0.00001 y que es menor al nivel de significancia 0.05, lo cual indica que hay evidencias para rechazar la hipotesis nula de normalidad.
+
+# Los datos de serie hora no se ajustan a un distribuye normal
+
+# Por lo cual para una buena predicciin no se puede aplicar la metodologia de BOX - JENKINS; ya que es recomendable que la serie se ajuste a una distribucion normal.
+```
+
+### APLICAMOS AUTO-ARIMA A LA SERIE HORA
+
+```{r}
+auto.arima(shora)
+```
+
+```{r}
+# El mejor modelo propuesto por auto-arima de la serie hora es SARIMA(0,1,1)(0,1,0)[12]; es el primer modelo que nos servivara para calibrar.
+```
+
+# ===============================
+
+## TRANSFORMACION DE LA SERIE DE DATOS
+
+```{r}
+# Como los datos no tiene distribucion normal.
+#
+# En caso de que la serie Y_t presente un comportamiento 
+# estacional no estacionario, habrá que tomar diferencias 
+# entre aquellas observaciones separadas por el periodo que
+# presenta el comportamiento estacional, aplicando para ello
+# el operador diferencia estacional
+```
+
+## APLICAMOS Y ANALISISAMOS DE LA PRIMERA DIFERENCIA DE LA SERIE HORA
+
+```{r, fig.align='center'}
+dhora<-diff(shora)
+#defhora <- data.frame(dhora)
+#write.table(defhora,file = "difserie.csv", sep =";", row.names = F)
+dhora
+#capture.output(dhora, file = "expoconsola.xls")
+```
+### GRAFICA DE CAJA DE LA PRIMERIA DIFERENCIA
+
+```{r, fig.align='center'}
+#GRAFICA DE CAJAS
+ggplot(hora, aes(x = year, y = dhora))+
+  theme_classic()+
+  coord_flip()+
+  geom_boxplot(aes(col = year), lwd = 1)+
+  stat_summary(fun.y=mean, col="gold")
+# stat_summary(fun.data = "mean_cl_boot")
+```
+
+### HISTOGRAMA DE LA PRIMERA DIFERENCIA
+
+```{r, fig.align='center'}
+## HSTOGRAMA la serie (horas de trabajo mensual)
+hist(dhora, prob=T, col = "red",main="Histograma de horas trabajadas con primera diferencia",
+     xlab="Horas Mensuales")
+lines(density(dhora),lwd=2, col= "green")
+dme<-mean(dhora)
+dme
+dst<-sd(dhora)
+dst
+dx <- seq(-400,400,length=120)
+dx
+dy <- dnorm(dx,dme,dst)
+lines(dx,dy,lwd=2,col="blue")
+```
+
+### GRAFICO DE TEST DE NORMALIDAD DE LA PRIMERA DIFERENCIA
+```{r}
+#=======================
+# Grafico de test de Normalidad
+qqnorm(dhora)
+qqline(dhora,col="red")
+```
+```{r}
+# Se observa de la serie con primera diferencia de horas de trabajo de las maquinarias de la municipalidad distrital de Caracoto que al parecer se ajusta a una distribución normal para lo cual aplicamos el test de normalidad.
+```
+
+
+### TEST DE PEARSON PRIMERA DIFERENCIA
+```{r, fig.align='center'}
+# Test de Pearson
+# Pearson chi-square normality test
+nortest::pearson.test(dhora)
+```
+
+```{r}
+# En la figura se tiene que el valor-P para la prueba fue de
+# 0.09786 y que es mayor al nivel de significancia 0.05, 
+# lo cual indica que hay evidencias para rechazar la hipotesis
+# nula de normalidad. 
+# Como se ve en el estad?stico de PEARSON concluimos que la
+# serie si se ajusta a una distribucion normal; ya podemos
+# aplicar la metodologia de BOX - JENKINS.
+```
+
+# ===============================
+
+## Identificacion del Modelo (METODOLOGIA BOX JENKINS)
+
+```{r}
+#grafica de la serie dhora
+dygraph(dhora, main = 
+          "Horas de trabajo de maquinaria agricola de la Municipalidad de Caracoto 
+        con una diferencia",xlab = "year",ylab = "Horas")%>%
+  dyOptions(fillGraph = TRUE, fillAlpha = 0.4)%>%
+  dyOptions(drawPoints = TRUE,pointSize = 2)%>% 
+  dyRangeSelector()
+# En el grafico de la serie con una diferencia se observa que la serie no tiene tendencia en media y en varianza; ahora se tiene que probar que la serie no tenga raiz unitaria (serie estacionaria).
+```
+
+### TEST DE Dickey-Fuller PARA VER SI LOS RESIDUALES TIENEN RAIZ UNITARIA
+```{r, fig.align='center'}
+adf.test(dhora,alternative = "stationary")
+# se tiene que el valor-P 0.01 el cual es menor al nivel de significancia 0.05. Por lo tanto, indica que se rechaza la hipotesis nula H_0 y se acepta la hipotesis alterna H_1 quiere decir, que los datos de la serie con una diferencia de horas de trabajo de las maquinarias de la municipalidad de Caracoto no presentan raiz unitaria por lo cual la serie es estacionaria.
+```
+
+# ===============================
+
+## ESTIMACION DEL MODELO
+
+#### APLICAMOS AUTO-ARIMA A LA SERIE CON UNA DIFERENCIAS Y GRAFICAMOS LA AUTOCORRELACION Y AUTOCORRELACION PARCIAL
+
+```{r, fig.align='center'}
+auto.arima(dhora, trace=TRUE)
+# el mejor modelo generado por AUTO - ARIMA es un SARIMA(0,0,1)(0,1,0)[12]; de la serie con una diferencia.
+
+par(mfrow=c(2,1), mar=c(4,4,4,1+.1))
+```
+
+### GRAFICA DE AUTOCORRELACION SIMPLE Y AUTOCORRELACION PARCIAL
+
+```{r, fig.align='center'}
+#dividir el cuadro para las graficas
+acf(dhora, main="correlacion Simple - dhora",
+    ylim=c(-1,1),col="black")
+
+pacf(dhora, main="correlacion Parcial - dhora",
+     ylim=c(-1,1),col="black")
+```
+
+##### Los modelos calculados por auto.arima los guardamos en una tabla de datos para calcular los ECM y selecionar el modelo que tiene menor error cuadratico medio
+
+# ===============================
+
+### PARA CALIBRAMOS LOS MODELOS ENCONTRADOS POR AUTO-ARIMA PARTICIONAMOS LA SERIE EN DOS GRUPOS:
+
+#### Aprendizaje cera del 2010 al 2018 y testin del 2019
+
+### PARTICION DE LOS DATOS DE LA SERIE HORA
+
+```{r, fig.align='center'}
+ahora <- dhora[1:107]
+#Serie de arpender
+ahora <- ts(ahora, start =c(2010,2), freq = 12)
+ahora
+length(ahora)
+#serie de testin
+thora <- dhora[108:119]
+thora
+length(thora)
+```
+
+### CALIBRANDO EL MODELOS CON LOS DATOS DE APRENDISAJE Y TESTIN
+
+```{r}
+# Para encontrar el mejor modelo, calibraremos los modelos propuesto por Auto-arima y los mediremos con el Error Cuadratico Medio (ECM); y elegimos al modelo que tenga el menor ECM.
+```
+
+### MEDICION DEL ERROR EN PRONOSTICOS DE SERIES
+```{r}
+#ERROR RELATIVO (ER)
+ER <- function(Pron, Real){
+  return(sum(abs(Pron-Real))/abs(sum(Real)))
+}
+#ERROR CUADRATICO MEDIO (MSE)
+ECM <- function(Pred, Real){
+  N <- length(Real)
+  SS <- sum((Real-Pred)^2)
+  return(1/N*SS)
+}
+# PORCENTAJE DE FALLAS HACIA ARRIBA EN CONTEO (PFA)
+PFA <- function(Pron, Real){
+  Total <- 0
+  N <- length(Pron)
+  for(i in 1:N){
+    if (Pron[i]>=Real[i])
+      Total <- Total+1
+  }
+  return(Total/N)
+}
+# PORCENTAJE DE FALLAS HACIA ARRIBA EN ABSOLUTO (PTFA)
+PTFA <- function(Pron, Real){
+  Total <- 0
+  SReal <- 0
+  N <- length(Pron)
+  for (i in 1:N) {
+    if (Pron[i] >= Real[i]) {
+      Total<-Total+(Pron[i]-Real[i])
+      SReal<-SReal+abs(Real[i])
+    }
+  }
+  if(Total==0)
+    SReal = 1
+  return(Total/SReal)
+}
+```
+
+#### Calibracion de modelos que fueron propuesto por Auto-arima de la serie con primera diferencia y los calibramos con el Grupo aprendizaje
+
+```{r}
+tmod<-read.csv("modelos.csv",header = T, dec=".", sep=";")
+head(tmod)
+# Funcion para calibrar los modelos
+calibrar<-function(aprender,testing){
+  error.c<-Inf
+        p<-1
+            while(p<=38) {
+              mod.hora <- arima(x = aprender, order = c(tmod[p,3],tmod[p,4],tmod[p,5]),seasonal=list(order=c(tmod[p,6],tmod[p,7],tmod[p,8]),period=12))
+              pred.hora <- predict(mod.hora, n.ahead=12)
+# CUADRO DE LOS ERRORES CUADRATICOS MEDIOS DE LOS MODELOS CALIBRADOS
+              ecm.a <- sqrt(ECM(pred.hora$pred,testing))
+              if(ecm.a<error.c){
+                error.c<-ecm.a
+                mejor<-mod.hora
+              }
+              errores<-print(paste(p,ecm.a,sep ="  =  "))
+              p<-p + 1
+            }
+  return(mejor)
+}
+modelo<-calibrar(ahora,thora)
+modelo
+# El mejor modelo calibrado por la funci?n programa es 
+# SARIMA(2,0,0)(1,1,1)[12]; el cual obtuvo el menor ECM de 15.2407393959267.
+```
+
+# ===============================
+
+## IDENTIFICACION DEL MODELO A UTILIZAR
+
+#### CALCULAMOS LAS MEDICIONES DE ERRORES EN PRONOSTICO DE LOS MODELOS PROPUESTOS:
+
+#### Modelo SARIMA(0,1,1)(0,1,0)[12]
+```{r}
+# Se obtuvo aplicando Auto-arima a la sarie con una diferencia
+```
+
+```{r}
+#   SERIE ahora SARIMA(0,1,1)(0,1,0)[12]
+mod.ahora <- arima(x = ahora, order = c(0,1,1),seasonal=list(order=c(0,1,0),period=12))
+mod.ahora
+pred.ahora <- predict(mod.ahora, n.ahead=12)
+pred.ahora
+#ERROR RELATIVO
+er.a<-ER(pred.ahora$pred,thora)
+er.a
+#ERROR CM
+ecm.a <- sqrt(ECM(pred.ahora$pred,thora))
+ecm.a
+#PROCENTAJE DE FALLOS ARRIBA
+pfa.a<-PFA(pred.ahora$pred,thora)
+pfa.a
+#PROCENTAJE DE FALLOS ARRIBA ABSOLUTO
+ptfa.a<-PTFA(pred.ahora$pred,thora)
+ptfa.a
+verror.a<-c(er.a,pfa.a,ptfa.a,ecm.a)
+```
+
+#### Modelo SARIMA(2,1,0)(1,1,1)[12]
+```{r}
+# Se obtubo cuando calibramos los ECM de la serie con una diferencia
+```
+
+```{r}
+#   SERIE chora AUTO-ARIMA(2,1,0)(1,1,1)[12]
+mod.chora <- arima(x = ahora, order = c(2,1,0),seasonal=list(order=c(1,1,1),period=12))
+mod.chora
+pred.chora <- predict(mod.chora, n.ahead=12)
+pred.chora
+#ERROR RELATIVO
+er.c<-ER(pred.chora$pred,thora)
+er.c
+#ERROR CM
+ecm.c<-sqrt(ECM(pred.chora$pred,thora))
+ecm.c
+#PROCENTAJE DE FALLOS ARRIBA
+pfa.c<-PFA(pred.chora$pred,thora)
+pfa.c
+#PROCENTAJE DE FALLOS ARRIBA ABSOLUTO
+ptfa.c<-PTFA(pred.chora$pred,thora)
+ptfa.c
+
+verror.c<-c(er.c,pfa.c,ptfa.c,ecm.c)
+```
+
+#### Modelo ARIMA(2,1,0)(0,0,0)[12]
+```{r}
+# Se planteamos como investigador cuando se observa las graficas de ACF y PACF de la serie con una diferencia
+```
+
+```{r}
+#   SERIE ihora AUTO-ARIMA(2,1,0)(0,0,0)[12]
+mod.ihora <- arima(x = ahora, order = c(2,1,0),seasonal=list(order=c(0,0,0),period=12))
+mod.ihora
+pred.ihora <- predict(mod.ihora, n.ahead=12)
+pred.ihora
+#ERROR RELATIVO
+er.i<-ER(pred.ihora$pred,thora)
+er.i
+#ERROR CM
+ecm.i<-sqrt(ECM(pred.ihora$pred,thora))
+ecm.i
+#PROCENTAJE DE FALLOS ARRIBA
+pfa.i<-PFA(pred.ihora$pred,thora)
+pfa.i
+#PROCENTAJE DE FALLOS ARRIBA ABSOLUTO
+ptfa.i<-PTFA(pred.ihora$pred,thora)
+ptfa.i
+
+verror.i<-c(er.i,pfa.i,ptfa.i,ecm.i)
+```
+
+### COMPARAMOS LOS MODELOS CON EL GRAFICO DE RADAR
+```{r, fig.align='center'}
+# Cuadro de Medicion de Errores en pronosticos de series
+errores<-rbind(verror.a,verror.c,verror.i)
+rownames(errores)<-c("Errores Auto-arima","Errores Calibrada","Errores Planteado")
+colnames(errores)<-c("Error Relativo","PFA","PTFA","Error Cuadratico Medio")
+errores<-as.data.frame(errores)
+maximos<-apply(errores,2, max)
+minimos<-apply(errores,2, min)
+errores<-rbind(minimos,errores)
+errores<-rbind(maximos,errores)
+errores
+
+# CREANDO GRAFICO DE REDAR
+radarchart(errores,maxmin = TRUE,axistype = 4,axislabcol = "slategray4",
+           centerzero = FALSE,seg = 8,cglcol = "gray67",
+           pcol = c("green","blue","red"),
+           plty = 1,
+           plwd = 3,
+           title = "Comparacion de Errores")
+legenda<-legend(1.5,1,legend = c("Au-Arima","Calibrado","Planteado"),
+                seg.len = -1.4,
+                title = "Errores",
+                pch = 21,
+                bty = "n",lwd = 3,y.intersp = 1,horiz = FALSE,
+                col = c("green","blue","red"))
+```
+
+```{r}
+# El grafico de radar se observa que el modelo de Auto-arima y el modelo Calibrado tienen mediciones similares, a ecepcion de PTFA lo cual para elegir el menor modelo elegimos el menor PTFA que pertenece al modelo Calibrado de SARIMA(2,1,0)(1,1,1)(12.
+```
+
+# ===============================
+
+## VALIDACION DEL MODELO
+
+#### EL TEST DE Ljungbox PARA VER SI LA SERIE ES RUIDO BLANCO
+
+```{r}
+# Al llevar a cabo el modelo de pron?stico ARIMA siempre es necesario analizar el comportamiento de los residuos, en este caso nos interesa analizar si estos residuos se comportan como ruido blanco.
+```
+
+```{r}
+#Test de Ljungbox
+mejor.modelo <- arima(x = shora, order = c(2,1,0),seasonal=list(order=c(1,1,1),period=12))
+
+retardos <- 24
+P.va.Re <- c()
+inter <- c()
+pva<-0.05
+n.corre<-rep(1:retardos,1)
+
+for (i in 1:length(n.corre)) {
+  lb<-Box.test(residuals(mejor.modelo),lag=i,type = "Ljung-Box")
+  P.va.Re[i]<- lb$p.value
+  if (pva<=P.va.Re[i]) {
+    inter[i]<-1
+  }else{
+    inter[i]<-0
+  }
+}
+df.r<-data.frame(n.corre,P.va.Re,inter)
+df.r
+
+tsdiag(mejor.modelo)
+
+res.error=residuals(mejor.modelo)
+plot(res.error)
+```
+
+#### En el test Box-Ljung el p-value en mayor a 0.05; entonces los coeficientes son iguales a cero y que la serie es un ruido blanco
+
+### LA ECUACION DEL MODELO PARA FUTURAS PREDICCIONES, MIENTRAS NO EXISTA FACTORES EXTERNOS QUE ALTEREN LA SERIE
+
+#### Modelo:
+
+$$SARIMA(2,1,0)(1,1,1)_{[12]}$$
+
+#### Ecuacion del modelo:
+
+$$Y_t=\mu+\varphi_1Y_{t-1}+\varphi_2Y_{t-2}+\varPhi_1Y_{t-12}+a_t+\Theta_1a_{t-12}$$
+
+#### Desfase del periodo: 
+
+$"L"$ es el retardo o lag que se aplica a serie.
+
+$$LY_t=Y_{t-1}$$$$L^sY_t=Y_{t-s}$$
+
+#### Igualdades:
+
+$$\Delta Y_t=Y_t-Y_{t-1}$$
+$$\nabla=(1-L)$$
+
+#### Aplicamos la diferencias en media Regular y una(1) diferencia en media Estacional; de periodo 12: 
+
+$$\Delta^1\Delta^{12} Y_t=\varphi_1\Delta^1\Delta^{12} Y_{t-1}+\varphi_2\Delta^1\Delta^{12}Y_{t-2}+\varPhi_1\Delta^1\Delta^{12} Y_{t-12}+a_t+\Theta_1a_{t-12}$$
+
+#### Modelo simplificado:
+
+$$(1-\varphi_1L-\varphi_2L^2)*(1-\varPhi_1L^{12})*(1-L^1)*(1-L^{12})*Y_t=(1+\Theta_1L^{12})*a_t$$
+
+#### Modelos reducido:
+
+$$\varphi_2(L)*\varPhi_1(L)*\nabla^1*\nabla^{12}*Y_t=\Theta_1(L)*a_t$$
+
+$$AR(2)*SAR(1)*(d)^1*(D)^1*Y_t=SMA(1)*a_t$$
+
+# ===============================
+
+# PRONOSTICO CON EL MODELO ESTIMADO
+
+### REALIZAMOS LA PREDICCION PARA LOS SIGUIENTES 12 MESES DEL 2020 CON SU RESPECTIVA GRAFICA CON EL MODELO SARIMA(2,1,0)(1,1,1)[12]
+
+```{r, fig.align='center'}
+#   PREDICCION
+#  Analis con los 10 year y prediccion con el modelo SARIMA(2,1,0)(1,1,1)[12]
+prediccion<-forecast::forecast(mejor.modelo, h=12)
+prediccion
+
+```
+
+$$=====================$$
+
+#### Ecuacion del modelo con sus coeficientes:
+
+$$(1-L^1)(1-L^{12})Y_t=(1-0.6111L-0.3410L^2)(1-0.6738L^{12})(1+0.5878L^{12})a_t$$
+$$=====================$$
+
+```{r, fig.align='center'}
+plot(prediccion)
+
+pred <- predict(mejor.modelo,n.ahead = 12)
+
+preds<-pred$pred
+LimInf<-preds-pred$se
+
+LimSup<-preds+pred$se
+
+per_1<-seq(as.Date("2010-1-1"),as.Date("2019-12-1"),"month")
+per_2<-seq(as.Date("2020-1-1"),as.Date("2020-12-1"),"month")
+
+todas.series<-cbind(shora=xts(shora,order.by=per_1),LimInf=xts(LimInf,order.by=per_2),Pronostico=xts(preds,order.by=per_2),LimSup=xts(LimSup,order.by=per_2))
+
+dygraph(todas.series,main = "Prediccion de horas mensuales para el año 2020",xlab="Año",ylab="Cantidad de horas")%>%
+  dyOptions(fillGraph = TRUE, fillAlpha = 0.4)%>%
+  dyOptions(drawPoints = TRUE,pointSize = 2)%>%
+  dySeries(c("LimInf","Pronostico","LimSup"),label = "Horas")%>%
+  dyRangeSelector(height = 20,strokeColor = "")%>%
+  dyOptions(axisLineColor = "navy",gridLineColor = 'lightblue')
+```
